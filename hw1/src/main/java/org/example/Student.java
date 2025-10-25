@@ -3,249 +3,320 @@ package org.example;
 import java.util.*;
 import java.util.function.*;
 
-
+/**
+ * Класс {@code Student} описывает студента, у которого есть имя, список оценок
+ * и валидатор для проверки корректности оценок.
+ * Также реализована история изменений, позволяющая откатывать последние действия.
+ *
+ * @param <T> тип оценок (например, Integer, String, LocalDate и т.д.)
+ */
 public class Student<T> {
     private String name;
-    private List<T> marks;
-    private Predicate<T> validator;
+    private final List<T> marks;
+    private final Predicate<T> validator;
     private final List<Action<?>> history = new ArrayList<>();
 
-
-    private enum ActionTypes{
-        REMOVE_GRADE,
+    /**
+     * Типы действий, которые могут быть выполнены над объектом Student.
+     */
+    private enum ActionTypes {
+        /** Добавление оценки. */
         ADD_GRADE,
+        /** Удаление оценки. */
+        REMOVE_GRADE,
+        /** Изменение имени. */
         CHANGE_NAME
     }
 
+    /**
+     * Класс {@code Action} представляет одно действие,
+     * которое может быть отменено методом {@link #Restore()}.
+     *
+     * @param <E> тип данных, связанный с действием
+     */
     private static class Action<E> {
-        ActionTypes action;
-        E data;
+        private final ActionTypes action;
+        private final E data;
 
         public Action(ActionTypes type, E data) {
             this.action = type;
             this.data = data;
         }
 
-        private ActionTypes getActionType() {
-            return this.action;
-        }
-
-        private E getData() {
-            return this.data;
-        }
+        private ActionTypes getActionType() { return this.action; }
+        private E getData() { return this.data; }
     }
 
+    // ------------------ Методы доступа ------------------
 
-    public  String getName() {
-        return name;
-    }
+    /**
+     * Возвращает имя студента.
+     * @return имя студента
+     */
+    public String getName() { return name; }
 
-    public List<T> getGrades() {
-        return new ArrayList<>(marks);
-    }
+    /**
+     * Возвращает копию списка оценок студента.
+     * @return список оценок
+     */
+    public List<T> getGrades() { return new ArrayList<>(marks); }
 
-    private void changeName(String new_name) {
-        name = new_name;
-    }
+    // ------------------ Приватные методы управления ------------------
+
+    private void changeName(String newName) { name = newName; }
+
     private void addGrade(T mark) {
-        if (!validator.test(mark)) {
+        if (!validator.test(mark))
             throw new IllegalArgumentException("Некорректная оценка: " + mark);
-        }
         marks.add(mark);
     }
+
     private void removeGrade(T mark) {
-        for (int i = this.marks.size() - 1; i >= 0; --i) {
-            if(this.marks.get(i).equals(mark)) {
-                this.marks.remove(i);
+        for (int i = marks.size() - 1; i >= 0; i--) {
+            if (marks.get(i).equals(mark)) {
+                marks.remove(i);
                 return;
             }
         }
     }
 
+    // ------------------ Публичные операции ------------------
 
+    /**
+     * Изменяет имя студента и сохраняет предыдущее значение в историю.
+     *
+     * @param newName новое имя
+     * @throws IllegalArgumentException если имя пустое
+     */
     public void ChangeName(String newName) {
-        if (newName.isEmpty()) {
+        if (newName.isEmpty())
             throw new IllegalArgumentException("Пожалуйста, укажите корректное имя");
-        }
-        this.addNewLastAction(new Action<>(ActionTypes.CHANGE_NAME, this.name));
-        this.changeName(newName);
+        addNewLastAction(new Action<>(ActionTypes.CHANGE_NAME, this.name));
+        changeName(newName);
     }
-    public void  AddGrade(T mark) {
-        this.addGrade(mark);
-        this.addNewLastAction(new Action<>(ActionTypes.ADD_GRADE, mark));
+
+    /**
+     * Добавляет новую оценку студенту и сохраняет действие в историю.
+     *
+     * @param mark новая оценка
+     * @throws IllegalArgumentException если оценка некорректна
+     */
+    public void AddGrade(T mark) {
+        addGrade(mark);
+        addNewLastAction(new Action<>(ActionTypes.ADD_GRADE, mark));
     }
+
+    /**
+     * Удаляет оценку и сохраняет действие в историю.
+     *
+     * @param mark оценка, которую нужно удалить
+     */
     public void RemoveGrade(T mark) {
-        this.removeGrade(mark);
+        removeGrade(mark);
         addNewLastAction(new Action<>(ActionTypes.REMOVE_GRADE, mark));
     }
 
+    /**
+     * Отменяет последнее действие (undo).
+     * Если история пуста — ничего не происходит.
+     */
+    public void Restore() {
+        if (!history.isEmpty()) {
+            applyAction(getLastAction());
+            removeLastAction();
+        }
+    }
+
+    // ------------------ Методы сравнения и отображения ------------------
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj) return true; // та же ссылка
-        if (obj == null || getClass() != obj.getClass()) return false;
-
-        Student<?> other = (Student<?>) obj;
-        return Objects.equals(this.name, other.name)
-                && Objects.equals(this.marks, other.marks);
+        if (this == obj) return true;
+        if (!(obj instanceof Student<?> other)) return false;
+        return Objects.equals(name, other.name) && Objects.equals(marks, other.marks);
     }
+
     @Override
-    public int hashCode() {
-        return Objects.hash(name, marks);
+    public int hashCode() { return Objects.hash(name, marks); }
+
+    @Override
+    public String toString() { return name + ": " + marks; }
+
+    // ------------------ Конструкторы ------------------
+
+    /**
+     * Создает студента с именем и предикатом проверки оценок.
+     * @param name имя студента
+     * @param validator функция, проверяющая корректность оценок
+     */
+    public Student(String name, Predicate<T> validator) {
+        this(name, new ArrayList<>(), validator);
     }
-    @Override public String toString() { return name + ": " + marks; }
 
-
-
-    public Student(String new_name, Predicate<T> validator) {
-       this(new_name, new ArrayList<>(), validator);
-    }
+    /**
+     * Создает студента с именем без проверки оценок (все значения допустимы).
+     * @param name имя студента
+     */
     public Student(String name) {
-        this(name, new ArrayList<>(),x -> true);
-    }
-    public Student(String new_name, List<T> new_marks, Predicate<T> new_validator) {
-        if (new_name.equals("")) {
-            throw new IllegalArgumentException("Некорретное имя студента");
-        }
-        this.name = new_name;
-        for (int i = 0; i < new_marks.size(); ++i) {
-            if (!new_validator.test(new_marks.get(i))) {
-                throw new IllegalArgumentException("Некорректная оценка студента");
-            }
-        }
-        this.marks = new ArrayList<T>(new_marks);
-        this.validator = new_validator;
-    }
-    public Student(String new_name, List<T> new_marks) {
-        this(new_name, new_marks, x -> true);
+        this(name, new ArrayList<>(), x -> true);
     }
 
-    private Action<?> getLastAction() {
-        return history.getLast();
+    /**
+     * Создает студента с именем, списком оценок и проверкой валидности.
+     * @param name имя
+     * @param marks список оценок
+     * @param validator валидатор
+     * @throws IllegalArgumentException если имя пустое или оценки некорректны
+     */
+    public Student(String name, List<T> marks, Predicate<T> validator) {
+        if (name.isEmpty())
+            throw new IllegalArgumentException("Некорректное имя студента");
+        for (T mark : marks)
+            if (!validator.test(mark))
+                throw new IllegalArgumentException("Некорректная оценка студента: " + mark);
+        this.name = name;
+        this.marks = new ArrayList<>(marks);
+        this.validator = validator;
     }
-    private void removeLastAction() {
-        history.remove(getLastAction());
+
+    /**
+     * Создает студента с именем и готовым списком оценок (без проверки).
+     * @param name имя
+     * @param marks список оценок
+     */
+    public Student(String name, List<T> marks) {
+        this(name, marks, x -> true);
     }
-    private void addNewLastAction(Action<?> action) {
-        history.add(action);
-    }
+
+    // ------------------ История изменений ------------------
+
+    private Action<?> getLastAction() { return history.getLast(); }
+    private void removeLastAction() { history.remove(getLastAction()); }
+    private void addNewLastAction(Action<?> action) { history.add(action); }
+
+    @SuppressWarnings("unchecked")
     private void applyAction(Action<?> action) {
-        if (action.getActionType() == ActionTypes.ADD_GRADE) {
-            this.removeGrade((T) action.getData());
-        } else if (action.getActionType() == ActionTypes.REMOVE_GRADE) {
-            this.addGrade((T) action.getData());
-        } else if (action.getActionType() == ActionTypes.CHANGE_NAME) {
-            this.changeName((String) action.getData());
+        switch (action.getActionType()) {
+            case ADD_GRADE -> removeGrade((T) action.getData());
+            case REMOVE_GRADE -> addGrade((T) action.getData());
+            case CHANGE_NAME -> changeName((String) action.getData());
         }
     }
 
-    public void Restore() {
-        if (!history.isEmpty()) {
-            this.applyAction(this.getLastAction());
-            this.removeLastAction();
-        }
-    }
+    // ------------------ Вложенный класс Flow ------------------
 
+    /**
+     * Мини-аналог Stream API для обработки коллекций.
+     *
+     * @param <T> тип элементов потока
+     */
+    public static class Flow<T> {
+        private final Iterable<T> source;
+        private final List<Function<T, T>> functions = new ArrayList<>();
+        private final List<Predicate<T>> filters = new ArrayList<>();
 
-    static public class Flow<T> {
-        private Iterable<T> source;
+        private Flow(Iterable<T> src) { this.source = src; }
 
-        private List<Function<T, T>> functions = new ArrayList<>();
-        private List<Predicate<T>> filters = new ArrayList<>();
-
-        private Flow(Iterable<T> src) {
-            this.source = src;
-        }
-
+        /**
+         * Создает поток из списка элементов.
+         * @param values список элементов
+         * @return поток Flow
+         */
         public static <T> Flow<T> of(List<T> values) {
             return new Flow<>(values);
         }
 
+        /**
+         * Создает поток из произвольного количества элементов.
+         * @param values элементы
+         * @return поток Flow
+         */
         @SafeVarargs
         public static <T> Flow<T> of(T... values) {
             return new Flow<>(Arrays.asList(values));
         }
 
+        /**
+         * Создает поток, аналогичный {@code Stream.iterate}.
+         *
+         * @param seed начальное значение
+         * @param next функция генерации следующего элемента
+         * @param hasNext условие продолжения
+         * @return поток Flow
+         */
         public static <T> Flow<T> iterate(T seed, UnaryOperator<T> next, Predicate<T> hasNext) {
-            Iterable<T> iterable = new Iterable<T>() {
-                @Override
-                public Iterator<T> iterator() {
-                    return new Iterator<T>() {
-                        private T current = seed;
-
-                        @Override
-                        public boolean hasNext() {
-                            return hasNext.test(current);
-                        }
-
-                        @Override
-                        public T next() {
-                            T value = current;
-                            current = next.apply(value);
-                            return value;
-                        }
-                    };
+            Iterable<T> iterable = () -> new Iterator<>() {
+                private T current = seed;
+                public boolean hasNext() { return hasNext.test(current); }
+                public T next() {
+                    T value = current;
+                    current = next.apply(value);
+                    return value;
                 }
             };
             return new Flow<>(iterable);
         }
 
+        /**
+         * Добавляет преобразующую функцию (map).
+         * @param func функция преобразования
+         * @return текущий объект Flow
+         */
         public Flow<T> function(Function<T, T> func) {
             functions.add(func);
             return this;
         }
 
+        /**
+         * Добавляет фильтр (filter).
+         * @param pred предикат-фильтр
+         * @return текущий объект Flow
+         */
         public Flow<T> filter(Predicate<T> pred) {
             filters.add(pred);
             return this;
         }
 
+        /**
+         * Сокращает (агрегирует) поток, применяя бинарную операцию.
+         * Аналог {@code Stream.reduce()}.
+         *
+         * @param binop бинарная операция
+         * @return результат свёртки
+         */
         public T reduce(BinaryOperator<T> binop) {
             T result = null;
             for (T item : source) {
-                boolean pass = true;
-                for (Predicate<T> f : filters) {
-                    if (!f.test(item)) {
-                        pass = false;
-                        break;
-                    }
-                }
-
-                if (!pass) {
-                    continue;
-                }
+                boolean pass = filters.stream().allMatch(f -> f.test(item));
+                if (!pass) continue;
 
                 T value = item;
-                for (Function<T, T> func : functions) {
+                for (Function<T, T> func : functions)
                     value = func.apply(value);
-                }
 
-                if (result == null) {
-                    result = value;
-                } else {
-                    result = binop.apply(result, value);
-                }
+                result = (result == null) ? value : binop.apply(result, value);
             }
             return result;
         }
 
+        /**
+         * Сохраняет результаты потока в коллекцию.
+         * Аналог {@code Stream.collect()}.
+         *
+         * @param supplier поставщик контейнера
+         * @param accumulator функция накопления
+         * @param <R> тип контейнера
+         * @return заполненный контейнер
+         */
         public <R> R collect(Supplier<R> supplier, BiConsumer<R, T> accumulator) {
             R container = supplier.get();
-
             for (T item : source) {
-                boolean pass = true;
-                for (Predicate<T> filter : filters) {
-                    if (!filter.test(item)) {
-                        pass = false;
-                        break;
-                    }
-                }
+                boolean pass = filters.stream().allMatch(f -> f.test(item));
                 if (!pass) continue;
 
                 T value = item;
-                for (Function<T, T> function : functions) {
-                    value = function.apply(value);
-                }
+                for (Function<T, T> func : functions)
+                    value = func.apply(value);
 
                 accumulator.accept(container, value);
             }
